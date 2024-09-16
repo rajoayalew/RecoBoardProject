@@ -18,7 +18,6 @@
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
-#include <stdbool.h>
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
@@ -63,25 +62,6 @@ typedef struct mag_data_t {
 } mag_data_t;
 
 typedef enum {
-      LOWEST_D1 = 0x40,
-      LOW_D1 = 0x42,
-      MED_D1 = 0x44,
-      HIGH_D1 = 0x46,
-      HIGHEST_D1 = 0x48,
-      LOWEST_D2 = 0x50,
-      LOW_D2 = 0x52,
-      MED_D2 = 0x54,
-      HIGH_D2 = 0x56,
-      HIGHEST_D2 = 0x58,
-} baro_accuracy_t;
-
-typedef enum {
-    READ_ADC = 0x00,
-    BARO_RESET = 0x1E,
-    PROM_READ = 0xA0,
-} baro_commands_t;
-
-typedef enum {
     LOWEST_TIME = 1,
     LOW_TIME = 2,
     MED_TIME = 3,
@@ -99,15 +79,6 @@ typedef struct PROM_DATA {
 } prom_data_t;
 
 // Make sure you use the correct percision value for each
-
-typedef struct BARO_HANDLE {
-    int32_t temperature;
-    int32_t pressure;
-    baro_accuracy_t tempAccuracy; // Use only the D1 values
-    baro_accuracy_t pressureAccuracy; // Use only the D2 values
-    baro_conversion_time_t convertTime;
-    prom_data_t coefficients;
-} baro_handle_t;
 
 uint8_t generateMagAddress(mag_reg_t regAddress, bool readFlag, bool consecutiveFlag) {
 
@@ -188,116 +159,6 @@ int writeMagRegister(SPI_HandleTypeDef* magSPIHandler, mag_reg_t regAddress, uin
 	HAL_GPIO_WritePin(MAG_NCS_GPIO_Port, MAG_NCS_Pin, GPIO_PIN_SET);
 
 	return result;
-}
-
-void resetBarometer(SPI_HandleTypeDef* baroSPI) {
-	HAL_GPIO_WritePin(GPIOC,BAR_NCS_Pin,GPIO_PIN_RESET);
-  	uint8_t baroReset = BARO_RESET;
-    HAL_SPI_Transmit(baroSPI, &baroReset, 1, HAL_MAX_DELAY);
-    HAL_GPIO_WritePin(GPIOC,BAR_NCS_Pin,GPIO_PIN_SET);
-}
-
-void getPROMData(SPI_HandleTypeDef* baroSPI, baro_handle_t* baroHandle) {
-
-	HAL_GPIO_WritePin(GPIOC,BAR_NCS_Pin,GPIO_PIN_RESET);
-    uint8_t READ_PROM = 0xA0;
-    uint8_t rxBuffer[2] = {0, 0};
-    READ_PROM |= (1 << 1);
-
-    short result = HAL_SPI_Transmit(baroSPI, &(READ_PROM), 1, HAL_MAX_DELAY);
-    result = HAL_SPI_Receive(baroSPI, rxBuffer, 2, HAL_MAX_DELAY);
-    baroHandle->coefficients.C1 = (uint16_t) rxBuffer[1] << 8 | rxBuffer[0];
-    READ_PROM = 0xA0;
-
-    READ_PROM |= (1 << 2);
-    result = HAL_SPI_Transmit(baroSPI, &(READ_PROM), 1, HAL_MAX_DELAY);
-    result = HAL_SPI_Receive(baroSPI, rxBuffer, 2, HAL_MAX_DELAY);
-    baroHandle->coefficients.C2 = (uint16_t) rxBuffer[1] << 8 | rxBuffer[0];
-    READ_PROM = 0xA0;
-
-    READ_PROM |= (1 << 1 || 1 << 2);
-    result = HAL_SPI_Transmit(baroSPI, &(READ_PROM), 1, HAL_MAX_DELAY);
-    result = HAL_SPI_Receive(baroSPI, rxBuffer, 2, HAL_MAX_DELAY);
-    baroHandle->coefficients.C3 = (uint16_t) rxBuffer[1] << 8 | rxBuffer[0];
-    READ_PROM = 0xA0;
-
-    READ_PROM |= (1 << 3);
-    result = HAL_SPI_Transmit(baroSPI, &(READ_PROM), 1, HAL_MAX_DELAY);
-    result = HAL_SPI_Receive(baroSPI, rxBuffer, 2, HAL_MAX_DELAY);
-    baroHandle->coefficients.C4 = (uint16_t) rxBuffer[1] << 8 | rxBuffer[0];
-    READ_PROM = 0xA0;
-
-    READ_PROM |= (1 << 3 | 1 << 1);
-    result = HAL_SPI_Transmit(baroSPI, &(READ_PROM), 1, HAL_MAX_DELAY);
-    result = HAL_SPI_Receive(baroSPI, rxBuffer, 2, HAL_MAX_DELAY);
-    baroHandle->coefficients.C5 = (uint16_t) rxBuffer[1] << 8 | rxBuffer[0];
-    READ_PROM = 0xA0;
-
-    READ_PROM |= (1 << 3 | 1 << 2);
-    result = HAL_SPI_Transmit(baroSPI, &(READ_PROM), 1, HAL_MAX_DELAY);
-    result = HAL_SPI_Receive(baroSPI, rxBuffer, 2, HAL_MAX_DELAY);
-    baroHandle->coefficients.C6 = (uint16_t) rxBuffer[1] << 8 | rxBuffer[0];
-
-
-    HAL_GPIO_WritePin(GPIOC,BAR_NCS_Pin,GPIO_PIN_SET);
-    return;
-}
-
-void getCurrTempPressure(SPI_HandleTypeDef* baroSPI, baro_handle_t* baroHandle) {
-
-	HAL_GPIO_WritePin(GPIOC, BAR_NCS_Pin, GPIO_PIN_RESET);
-  prom_data_t coefficients = baroHandle->coefficients;
-  uint8_t readADCCommand[4] = {READ_ADC, 0, 0, 0};
-
-    HAL_SPI_Transmit(baroSPI, &(baroHandle->tempAccuracy), 1, HAL_MAX_DELAY);
-    HAL_Delay(baroHandle->convertTime);
-
-    uint8_t digitalTempBuff[4];
-    HAL_SPI_TransmitReceive(baroSPI, readADCCommand, digitalTempBuff, 4, HAL_MAX_DELAY);
-
-    uint32_t digitalTemp = (digitalTempBuff[1] << 16) | (digitalTempBuff[2] << 8) | (digitalTempBuff[3] << 0);
-
-    HAL_SPI_Transmit(baroSPI, &(baroHandle->pressureAccuracy), 1, HAL_MAX_DELAY);
-    HAL_Delay(baroHandle->convertTime);
-
-    uint8_t digitalPressBuff[4];
-    HAL_SPI_TransmitReceive(baroSPI, readADCCommand, digitalPressBuff, 4, HAL_MAX_DELAY);
-
-    uint32_t digitalPress = (digitalPressBuff[1] << 16) | (digitalPressBuff[2] << 8) | (digitalPressBuff[3] << 0);
-
-    int32_t dT = digitalTemp - (coefficients.C5 << 8);
-    int32_t firstTemp = 2000 + dT * (coefficients.C6 >> 23);
-
-    int64_t offset = (coefficients.C1 << 16) + ((coefficients.C4 * dT) >> 7);
-    int64_t sensitivity = (coefficients.C1 << 15) + ((coefficients.C3 * dT) >> 8);
-
-    if (firstTemp >= 20) {
-        int32_t firstPress = (digitalPress * (sensitivity >> 21) - offset) >> 15;
-        baroHandle->temperature = firstTemp;
-        baroHandle->pressure = firstPress;
-        HAL_GPIO_WritePin(GPIOC,BAR_NCS_Pin,GPIO_PIN_SET);
-        return;
-    }
-
-    int32_t T2 = ((dT * dT) >> 31);
-    int64_t OFF2 = 5 * ((firstTemp - 2000) * (firstTemp - 2000)) / 2;
-    int64_t SENS2 = 5 * ((firstTemp - 2000) * (firstTemp - 2000)) / 4;
-
-    if (firstTemp < -15) {
-        OFF2 = OFF2 + 7 * ((firstTemp + 1500) * (firstTemp + 1500));
-        SENS2 = SENS2 + 11 * ((firstTemp + 1500) * (firstTemp + 1500)) / 2;
-    }
-
-    offset = offset - OFF2;
-    sensitivity = sensitivity - SENS2;
-
-    int32_t secondPress = (digitalPress * (sensitivity >> 21) - offset) >> 15;
-    int32_t secondTemp = firstTemp - T2;
-
-    baroHandle->temperature = secondTemp;
-    baroHandle->pressure = secondPress;
-    HAL_GPIO_WritePin(GPIOC, BAR_NCS_Pin, GPIO_PIN_SET);
-    return;
 }
 
 uint8_t getStatusRegister(uint8_t* returnArray, SPI_HandleTypeDef* hspi) {
@@ -496,10 +357,10 @@ uint16_t readIMUDoubleRegister(SPI_HandleTypeDef* imuSPI, imu_reg_t upperRegAddr
 	return finalResult;
 }
 
-
-
-
-
+uint8_t initializeIMU(SPI_HandleTypeDef* hspi) {
+	uint8_t status = writeIMURegister(hspi, PIN_CTRL, 0b01111111);
+	return status;
+}
 
 /* USER CODE END PTD */
 
@@ -598,8 +459,7 @@ int main(void)
   getCurrTempPressure(&hspi1, barometer);
   */
 
-  /*
-  uint8_t WHO_AM_I_VALUE = readMagSingleRegister(&hspi1, WHO_AM_I);
+  uint8_t WHO_AM_I_VALUE = readMagSingleRegister(&hspi1, WHO_AM_I_MAG);
   uint8_t CTRL_REG = readMagSingleRegister(&hspi1, CTRL_REG3);
   int result = writeMagRegister(&hspi1, CTRL_REG3, 0b00000000);
   CTRL_REG = readMagSingleRegister(&hspi1, CTRL_REG3);
@@ -608,24 +468,19 @@ int main(void)
   precision = readMagSingleRegister(&hspi1, CTRL_REG4);
   precision = writeMagRegister(&hspi1, CTRL_REG1, 0b11111100);
   precision = readMagSingleRegister(&hspi1, CTRL_REG1);
+
+ /*
+ volatile BARO_HANDLE* baroHandle;
+  baroHandle->tempConv = HIGHEST_D1;
+  baroHandle->pressConv = HIGHEST_D2;
+
+  resetBarometer(&hspi1, BAR_NCS_Pin);
+  initBarometer(&hspi1, baroHandle, BAR_NCS_Pin);
   */
 
-  short status = writeIMURegister(&hspi1, PIN_CTRL, 0b01111111);
-  short WHO_AM_I = readIMUSingleRegister(&hspi1, WHO_AM_I_IMU);
-
-  mag_data_t magData = {0};
-  uint8_t arrays[200][8] = {0};
-
-
-  for (int i = 0; i < 200; i++) {
-	  magData.MAG_X_VAL[i] = readMagDoubleRegister(&hspi1, OUT_X_H, OUT_X_L);
-	  magData.MAG_Y_VAL[i] = readMagDoubleRegister(&hspi1, OUT_Y_H, OUT_Y_L);
-	  magData.MAG_Z_VAL[i] = readMagDoubleRegister(&hspi1, OUT_Z_H, OUT_Z_L);
-	  HAL_Delay(100);
-  }
-
 while (1) {
-
+  uint8_t pdata = 5;
+  HAL_SPI_Transmit(&hspi1, &pdata, 1, HAL_MAX_DELAY);
     /* USER CODE END WHILE */
     /* USER CODE BEGIN 3 */
   }
