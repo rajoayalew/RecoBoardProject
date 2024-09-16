@@ -22,8 +22,28 @@ void getPROMData(spi_device_t* baroSPI, baro_handle_t* baroHandle) {
 
 void initBarometer(spi_device_t* baroSPI, baro_handle_t* baroHandle) {
     resetBarometer(baroSPI);
-    getPROMData(baroSPI, baroHandle)
+    getPROMData(baroSPI, baroHandle);
 
+    /*
+
+    baroHandle->coefficients[0] = baroHandle->coefficients[0] << 8;
+    baroHandle->coefficients[1] = baroHandle->coefficients[1];
+    baroHandle->coefficients[2] = baroHandle->coefficients[2];
+    baroHandle->coefficients[3] = baroHandle->coefficients[3];
+    baroHandle->coefficients[4] = baroHandle->coefficients[4];
+    baroHandle->coefficients[5] = baroHandle->coefficients[5];
+
+    */
+
+
+    return;
+}
+
+void getTemp() {
+
+}
+
+void getPressure() {
 
 }
 

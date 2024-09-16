@@ -42,9 +42,9 @@ typedef struct {
     uint16_t coefficients[8];
 } baro_handle_t;
 
-void resetBarometer(SPI_HandleTypeDef* baroSPI);
-void getPROMData(SPI_HandleTypeDef* baroSPI, baro_handle_t* baroHandle);
-void getCurrTempPressure(SPI_HandleTypeDef* baroSPI, baro_handle_t* baroHandle);
+void resetBarometer(spi_device_t* baroSPI);
+void getPROMData(spi_device_t* baroSPI, baro_handle_t* baroHandle);
+void getCurrTempPressure(spi_device_t* baroSPI, baro_handle_t* baroHandle);
 
 #endif
 
